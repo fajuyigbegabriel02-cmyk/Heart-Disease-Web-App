@@ -1,75 +1,58 @@
-# Heart Disease Risk Prediction — Web App (Framingham Model)
+# Heart Disease Risk Prediction — Web App (v2)
 
-A Streamlit-based clinical decision-support tool that predicts heart disease
-risk from patient clinical data, using a class-balanced Logistic Regression
-model trained on the Framingham Heart Study dataset (4,238 records).
+A Streamlit-based clinical decision-support tool predicting heart disease risk
+using a class-balanced Logistic Regression model trained on the Framingham
+Heart Study dataset (4,238 records). 10-fold CV performance: ROC-AUC ≈ 0.72,
+Recall ≈ 0.67.
 
-10-fold cross-validated performance: ROC-AUC ≈ 0.72, PR-AUC ≈ 0.35, Recall ≈ 0.67.
-The model was deliberately tuned (`class_weight='balanced'`) to prioritize
-catching at-risk patients given the dataset's 85/15 class imbalance — expect
-more false positives than a standard-threshold model, which is the right
-trade-off for a screening tool.
+## What's new in this version
+
+- **Look up existing patient by ID** — select any of the 4,238 patients from
+  the underlying dataset by ID; their details auto-fill and you can generate
+  a prediction with one click. Useful for demos, testing, and validating the
+  model against known outcomes (the actual recorded outcome is shown for
+  reference, though the model never sees it).
+- **New patient entry** — the original manual-entry form, for a patient not
+  in the dataset.
+- **Lifestyle factor callouts** — every prediction now highlights smoking
+  intensity and BMI specifically, with contextual warnings tied to this
+  study's own dose-response findings (e.g. heavy smoking ≈ double the heart
+  disease rate of light smoking), since lifestyle factors are this study's
+  core contribution.
 
 ## Project files
 
 ```
-webapp/
+webapp_v2/
 ├── app.py                              # Streamlit application
 ├── framingham_final_lr_model.joblib    # Trained model + preprocessing pipeline
-├── requirements.txt                    # Python dependencies
+├── patient_records.csv                 # 4,238 patient records for ID lookup
+├── requirements.txt
 └── README.md
 ```
 
-## 1. Run locally
+## Run locally
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
-
 pip install -r requirements.txt
-
 streamlit run app.py
 ```
 
-The app opens at `http://localhost:8501`.
+## Deploy on Streamlit Community Cloud
 
-## 2. Push to GitHub
+1. Push this folder to a GitHub repo.
+2. Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub.
+3. New app → select repo → main file `app.py` → Deploy.
 
-```bash
-git init
-git add .
-git commit -m "Framingham heart disease prediction app"
-git branch -M main
-git remote add origin https://github.com/<your-username>/<your-repo-name>.git
-git push -u origin main
-```
+## Note on patient_records.csv
 
-## 3. Deploy for free on Streamlit Community Cloud
-
-1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
-2. Click **"New app"**, select your repo, branch `main`, main file `app.py`.
-3. Click **Deploy**. You'll get a public URL to share for evaluation.
-
-## Inputs the app collects
-
-Demographics: age, gender, education level
-Lifestyle: current smoker (yes/no), cigarettes per day
-Medical history: BP medication, prior stroke, hypertension, diabetes
-Vitals/labs: total cholesterol, systolic BP, diastolic BP, BMI, resting heart rate, glucose
-
-## Model notes
-
-- Preprocessing (median/mode imputation, scaling, one-hot encoding) is bundled
-  inside `framingham_final_lr_model.joblib` alongside the fitted model, so
-  `app.py` only calls `.transform()` and `.predict_proba()`.
-- The model was trained with `class_weight='balanced'` to counter the dataset's
-  85/15 imbalance, favoring recall over raw accuracy — appropriate for a
-  screening context where missing a true positive is costlier than a false alarm.
+This file contains the de-identified Framingham dataset records (no personally
+identifying information — this is the same public research dataset used
+throughout the study), relabeled with synthetic Patient IDs (P00001–P04238)
+purely for lookup convenience in the demo. It is not real patient data.
 
 ## Disclaimer
 
-This tool is a research prototype intended to support, not replace, clinical
-judgment. Predictions should not be used as a sole basis for diagnosis or
-treatment decisions.
-=======
-
+Research prototype. Supports, does not replace, clinical judgement.

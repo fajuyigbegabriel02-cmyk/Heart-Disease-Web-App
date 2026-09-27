@@ -5,103 +5,158 @@ import joblib
 
 st.set_page_config(page_title="Heart Disease Risk Predictor", page_icon="❤️", layout="centered")
 
-# ---------- Load model ----------
+# ---------- Load model + patient records ----------
 @st.cache_resource
 def load_model():
     return joblib.load("framingham_final_lr_model.joblib")
 
+@st.cache_data
+def load_patients():
+    return pd.read_csv("patient_records.csv")
+
 bundle = load_model()
 preprocessor = bundle["preprocessor"]
 model = bundle["model"]
-num_cols = bundle["num_cols"]
-cat_cols = bundle["cat_cols"]
+patients_df = load_patients()
 
 st.title("❤️ Heart Disease Risk Prediction")
 st.caption(
-    "A machine learning-based clinical decision-support tool using Logistic Regression, "
-    "trained on the Framingham Heart Study dataset. This tool is intended to support, "
-    "not replace, clinical judgment."
+    "A machine learning-based clinical decision-support tool using a class-balanced Logistic "
+    "Regression model trained on the Framingham Heart Study dataset. This tool supports, but "
+    "does not replace, clinical judgement."
 )
 
 st.markdown("---")
-st.subheader("Patient Information")
 
-col1, col2 = st.columns(2)
-
-with col1:
-    age = st.number_input("Age (years)", min_value=20, max_value=100, value=50)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    education = st.selectbox(
-        "Education Level",
-        ["uneducated", "primaryschool", "graduate", "postgraduate"],
-    )
-    current_smoker = st.selectbox("Current Smoker?", ["No", "Yes"])
-    cigs_per_day = st.number_input(
-        "Cigarettes per Day", min_value=0, max_value=70, value=0,
-        help="0 if non-smoker. Smoking intensity matters more than smoker status alone.",
-    )
-    bp_meds = st.selectbox("On Blood Pressure Medication?", ["No", "Yes"])
-    prevalent_stroke = st.selectbox("History of Stroke?", ["No", "Yes"])
-    prevalent_hyp = st.selectbox("Hypertension?", ["No", "Yes"])
-
-with col2:
-    diabetes = st.selectbox("Diabetes?", ["No", "Yes"])
-    tot_chol = st.number_input("Total Cholesterol (mg/dL)", min_value=100, max_value=700, value=200)
-    sys_bp = st.number_input("Systolic Blood Pressure (mmHg)", min_value=80, max_value=300, value=120)
-    dia_bp = st.number_input("Diastolic Blood Pressure (mmHg)", min_value=40, max_value=150, value=80)
-    bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=25.0, step=0.1)
-    heart_rate = st.number_input("Resting Heart Rate (bpm)", min_value=40, max_value=150, value=75)
-    glucose = st.number_input("Glucose (mg/dL)", min_value=30, max_value=400, value=80)
+mode = st.radio(
+    "Choose an option:",
+    ["🔍 Look up existing patient by ID", "🆕 Enter a new patient"],
+    horizontal=True,
+)
 
 st.markdown("---")
 
-if st.button("Predict Heart Disease Risk", type="primary", use_container_width=True):
-    input_dict = {
-        "age": age,
-        "Gender": gender,
-        "education": education,
-        "currentSmoker": 1 if current_smoker == "Yes" else 0,
-        "cigsPerDay": cigs_per_day,
-        "BPMeds": 1 if bp_meds == "Yes" else 0,
-        "prevalentStroke": "yes" if prevalent_stroke == "Yes" else "no",
-        "prevalentHyp": 1 if prevalent_hyp == "Yes" else 0,
-        "diabetes": 1 if diabetes == "Yes" else 0,
-        "totChol": tot_chol,
-        "sysBP": sys_bp,
-        "diaBP": dia_bp,
-        "BMI": bmi,
-        "heartRate": heart_rate,
-        "glucose": glucose,
-    }
-    input_df = pd.DataFrame([input_dict])
 
+def run_prediction(input_df, source_label):
     X_proc = preprocessor.transform(input_df)
     proba = model.predict_proba(X_proc)[0][1]
     pred = model.predict(X_proc)[0]
-
-    st.markdown("### Result")
     risk_pct = proba * 100
 
+    st.markdown("### Result")
     if pred == 1:
         st.error(f"**Elevated Risk Indicated** — Estimated probability of heart disease: **{risk_pct:.1f}%**")
     else:
         st.success(f"**Lower Risk Indicated** — Estimated probability of heart disease: **{risk_pct:.1f}%**")
-
     st.progress(min(int(risk_pct), 100))
+
+    # Highlight the lifestyle-related inputs specifically, since this is the study's core contribution
+    st.markdown("#### Lifestyle Factor Contribution")
+    smoker = "Yes" if input_df["currentSmoker"].iloc[0] == 1 else "No"
+    cigs = input_df["cigsPerDay"].iloc[0]
+    bmi = input_df["BMI"].iloc[0]
+    lcol1, lcol2, lcol3 = st.columns(3)
+    lcol1.metric("Current Smoker", smoker)
+    lcol2.metric("Cigarettes/Day", f"{cigs:.0f}")
+    lcol3.metric("BMI", f"{bmi:.1f}")
+    if cigs >= 20:
+        st.warning("⚠️ Heavy smoking (20+ cigarettes/day) is associated with roughly double the heart disease rate of light smoking in this study's dose-response analysis.")
+    elif cigs > 0:
+        st.info("ℹ️ Smoking intensity (cigarettes/day) was found to be a more meaningful predictor than smoking status alone.")
+    if bmi >= 30:
+        st.warning("⚠️ A BMI in the obese range (≥30) was associated with a higher heart disease rate in this study's analysis.")
 
     st.info(
         "⚠️ This prediction is generated by a statistical model trained on a limited dataset and is "
-        "**not a medical diagnosis**. Please consult a qualified healthcare professional for clinical evaluation. "
-        "Note: this model uses a class-balanced threshold to prioritize catching at-risk patients (higher recall), "
-        "which means it may flag more false positives than a standard model — appropriate for a screening tool, "
-        "not a diagnostic one."
+        "**not a medical diagnosis**. Please consult a qualified healthcare professional for clinical evaluation."
     )
 
-    with st.expander("See input summary"):
+    with st.expander("See full input data used for this prediction"):
         st.dataframe(input_df, use_container_width=True)
+
+
+# ============ MODE 1: Existing patient lookup by ID ============
+if mode == "🔍 Look up existing patient by ID":
+    st.subheader("Look Up Existing Patient")
+    patient_id = st.selectbox(
+        "Select or type a Patient ID",
+        options=patients_df["Patient_ID"].tolist(),
+        index=0,
+        help=f"{len(patients_df)} patient records available from the Framingham dataset.",
+    )
+
+    if patient_id:
+        row = patients_df[patients_df["Patient_ID"] == patient_id].iloc[0]
+
+        st.markdown("#### Patient Details (auto-filled)")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write(f"**Age:** {row['age']:.0f}")
+            st.write(f"**Gender:** {row['Gender']}")
+            st.write(f"**Education:** {row['education']}")
+            st.write(f"**Current Smoker:** {'Yes' if row['currentSmoker']==1 else 'No'}")
+            st.write(f"**Cigarettes/Day:** {row['cigsPerDay']:.0f}" if pd.notna(row['cigsPerDay']) else "**Cigarettes/Day:** N/A")
+            st.write(f"**On BP Medication:** {'Yes' if row['BPMeds']==1 else 'No'}")
+            st.write(f"**History of Stroke:** {row['prevalentStroke']}")
+            st.write(f"**Hypertension:** {'Yes' if row['prevalentHyp']==1 else 'No'}")
+        with c2:
+            st.write(f"**Diabetes:** {'Yes' if row['diabetes']==1 else 'No'}")
+            st.write(f"**Total Cholesterol:** {row['totChol']:.0f}" if pd.notna(row['totChol']) else "**Total Cholesterol:** N/A")
+            st.write(f"**Systolic BP:** {row['sysBP']:.0f}")
+            st.write(f"**Diastolic BP:** {row['diaBP']:.0f}")
+            st.write(f"**BMI:** {row['BMI']:.1f}" if pd.notna(row['BMI']) else "**BMI:** N/A")
+            st.write(f"**Resting Heart Rate:** {row['heartRate']:.0f}" if pd.notna(row['heartRate']) else "N/A")
+            st.write(f"**Glucose:** {row['glucose']:.0f}" if pd.notna(row['glucose']) else "**Glucose:** N/A")
+
+        st.caption(f"Recorded outcome in dataset: **{row['ActualOutcome']}** (shown for reference only — the model does not see this).")
+
+        if st.button("Predict Heart Disease Risk for This Patient", type="primary", use_container_width=True):
+            input_df = pd.DataFrame([row.drop(["Patient_ID", "ActualOutcome"])])
+            run_prediction(input_df, "lookup")
+
+# ============ MODE 2: New patient manual entry ============
+else:
+    st.subheader("Enter New Patient Information")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        age = st.number_input("Age (years)", min_value=18, max_value=100, value=50)
+        gender = st.selectbox("Gender", ["Male", "Female"])
+        education = st.selectbox("Education Level", ["uneducated", "primaryschool", "graduate", "postgraduate"])
+        current_smoker = st.selectbox("Current Smoker?", ["No", "Yes"])
+        cigs_per_day = st.number_input(
+            "Cigarettes per Day", min_value=0, max_value=70, value=0,
+            help="0 if non-smoker. Smoking intensity matters more than smoker status alone — this study's core lifestyle finding.",
+        )
+        bp_meds = st.selectbox("On Blood Pressure Medication?", ["No", "Yes"])
+        prevalent_stroke = st.selectbox("History of Stroke?", ["No", "Yes"])
+        prevalent_hyp = st.selectbox("Hypertension?", ["No", "Yes"])
+
+    with col2:
+        diabetes = st.selectbox("Diabetes?", ["No", "Yes"])
+        tot_chol = st.number_input("Total Cholesterol (mg/dL)", min_value=100, max_value=700, value=200)
+        sys_bp = st.number_input("Systolic Blood Pressure (mmHg)", min_value=80, max_value=300, value=120)
+        dia_bp = st.number_input("Diastolic Blood Pressure (mmHg)", min_value=40, max_value=150, value=80)
+        bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=25.0, step=0.1)
+        heart_rate = st.number_input("Resting Heart Rate (bpm)", min_value=40, max_value=150, value=75)
+        glucose = st.number_input("Glucose (mg/dL)", min_value=30, max_value=400, value=80)
+
+    if st.button("Predict Heart Disease Risk", type="primary", use_container_width=True):
+        input_dict = {
+            "age": age, "Gender": gender, "education": education,
+            "currentSmoker": 1 if current_smoker == "Yes" else 0,
+            "cigsPerDay": cigs_per_day, "BPMeds": 1 if bp_meds == "Yes" else 0,
+            "prevalentStroke": "yes" if prevalent_stroke == "Yes" else "no",
+            "prevalentHyp": 1 if prevalent_hyp == "Yes" else 0,
+            "diabetes": 1 if diabetes == "Yes" else 0,
+            "totChol": tot_chol, "sysBP": sys_bp, "diaBP": dia_bp, "BMI": bmi,
+            "heartRate": heart_rate, "glucose": glucose,
+        }
+        input_df = pd.DataFrame([input_dict])
+        run_prediction(input_df, "new")
 
 st.markdown("---")
 st.caption(
     "Model: Logistic Regression (class-balanced) | Trained on the Framingham Heart Study dataset "
-    "(4,238 records) | 10-fold CV ROC-AUC ≈ 0.72, PR-AUC ≈ 0.35, Recall ≈ 0.67"
+    "(4,238 records) | 10-fold CV ROC-AUC ≈ 0.72, Recall ≈ 0.67"
 )
