@@ -71,3 +71,5 @@ Vitals/labs: total cholesterol, systolic BP, diastolic BP, BMI, resting heart ra
 This tool is a research prototype intended to support, not replace, clinical
 judgment. Predictions should not be used as a sole basis for diagnosis or
 treatment decisions.
+=======
+
