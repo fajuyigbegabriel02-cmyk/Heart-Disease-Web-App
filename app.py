@@ -4,7 +4,23 @@ import numpy as np
 import joblib
 
 st.set_page_config(page_title="Heart Disease Risk Predictor", page_icon="❤️", layout="centered")
-
+# Force sharp black text instead of Streamlit's default muted grey
+st.markdown("""
+<style>
+    label, .stMarkdown, .stText, p, span, div {
+        color: #000000 !important;
+    }
+    [data-testid="stCaptionContainer"] {
+        color: #1a1a1a !important;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #000000 !important;
+    }
+    [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {
+        color: #000000 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 # ---------- Load model + patient records ----------
 @st.cache_resource
 def load_model():
